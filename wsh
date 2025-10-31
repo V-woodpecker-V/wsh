@@ -1,5 +1,5 @@
-#!/bin/env bash
-set -euo pipefail
+#!/usr/bin/env bash
+#set -euo pipefail
 IFS=$'\t\n'
 
 help_format="  %-3s %-20s %s\n"
@@ -7,7 +7,7 @@ help_format_1="  $help_format"
 wsh_dir=$(dirname $(realpath "$0"))
 plugin_dir="$wsh_dir/plugins"
 
-declare -A args
+args=()
 flags=()
 
 # FLAGS
@@ -16,6 +16,10 @@ init=
 init_pyenv=
 init_nvm=
 shell_sync=
+
+stdout() {
+    printf '%s\n' "$@"
+}
 
 log() {
     printf "%s\n" "$@" >&2 
@@ -27,7 +31,15 @@ debug(){
     fi
 }
 
+to_array() {
+    local arr_name=$1
+    shift # first arg is the arr name, so let's ignore it from now on
+    IFS=$'\n' read -r -d '' -a $arr_name <<< "$*" || true
+}
+
+
 usage() {
+    log ""
     log "usage: $(basename $0) OPERATION [...]"
     log ""
     log "some OPTIONS enter a context and will allow the use of more OPTIONS, but whenever an OPTION from outside this context is passed, then it leaves the context, meaning that the order of OPTIONS is semi-important"
@@ -51,34 +63,40 @@ pre_process_flags() {
     for arg in "$@"; do
         case "$arg" in 
             --*)
-                flags+=("$arg")
+                stdout "$arg"
                 ;;
             -*)
                 for ((i=1; i<${#arg}; i++)); do
-                    flags+=("-${arg:i:1}")
+                    stdout "-${arg:i:1}"
                 done
                 ;;
             *)
-                flags+=("$arg")
+                stdout "$arg"
                 ;;
         esac
     done
 }
 
-assert_arg() {
-    if [[ -n $NEXT_MUST_BE_ARG ]]; then
-        log "expected an arg, but got $1"
-        usage
-        exit 1
-    fi
-}
-
 unknown_flag() {
     log "unknown argument: $1"
     log "mayhaps it was used in the wrong context?"
-    log ""
     usage
     exit 1
+}
+
+count_ops() {
+    local -a arr_name=$1
+    shift
+    local -a temp
+    count=0
+    for op in "$@"; do
+        if [[ ${!op} ]]; then
+            ((count++))
+            temp+=("$op")
+        fi
+    done
+    eval "$arr_name=(\"\${temp[@]}\")"
+    return $count
 }
 
 if [[ ${#@} -eq 0 ]]; then
@@ -86,9 +104,7 @@ if [[ ${#@} -eq 0 ]]; then
     exit 1
 fi
 
-pre_process_flags "$@"
-
-current_op=
+to_array flags "$(pre_process_flags "$@")"
 
 for ((i = 0 ; i < "${#flags[@]}" ; i++ )); do
     case "${flags[$i]}" in
@@ -123,7 +139,6 @@ for ((i = 0 ; i < "${#flags[@]}" ; i++ )); do
                 case "${flags[$i]}" in 
                     --sync | -S)
                         shell_sync=1
-                        current_op=shell_sync
                         ;;
                     *)
                         ((i--)) || true
@@ -136,12 +151,24 @@ for ((i = 0 ; i < "${#flags[@]}" ; i++ )); do
             exit 1
             ;;
         *)
-            if [[ -n $current_op ]]; then
-                args[$current_op]+="${flags[$i]}"$'\n'
-            fi
+            args+=("${flags[$i]}")
             ;;
     esac
 done
+
+# ADD MORE OPS HERE
+count_ops ops init shell_sync
+op_count=$?
+
+if [[ $op_count -eq 0 ]]; then
+    log "no operation defined"
+    usage
+    exit 1
+elif [[ $op_count -gt 1 ]]; then
+    log "more than 1 operation defined: " ${ops[@]}
+    usage
+    exit 1
+fi
 
 if [[ -n $init ]]; then
     debug "initializing autocompletions"
@@ -162,7 +189,7 @@ fi
 
 if [[ -n $shell_sync ]]; then
     debug "syncing packages"
-    while IFS=$'\n' read -r val; do
-        echo "'$val'"
-    done < <(printf '%s' "${args[shell_sync]}")
+    for pkg in "${args[@]}"; do
+        echo $pkg
+    done
 fi
