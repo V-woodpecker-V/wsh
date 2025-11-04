@@ -20,6 +20,7 @@ solidtime_project_id=
 time_offline=
 time_from=30
 time_start=
+time_live=
 
 format_seconds() {
     local total_s=$1
@@ -90,15 +91,15 @@ solidtime_get_shift_stats() {
    solidtime_assert_project_id
 
    local start="$(date -uv-${time_from}d +%Y-%m-%dT%H:%M:%SZ)"
-   local end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   local end="$(date -uv+1 +%Y-%m-%dT%H:%M:%SZ)"
 
-   local data=$(solidtime_get "/organizations/$solidtime_org_id/time-entries/aggregate" \
+   local data="$(solidtime_get "/organizations/$solidtime_org_id/time-entries/aggregate" \
        "start=$start" \
        "end=$end" \
        "project_ids[]=$solidtime_project_id" \
        "user_id=$solidtime_user_id" \
        "group=day" \
-       "active=false")
+       "active=false")"
 
    local seconds=$(echo "$data" | jq -r .data.seconds)
    local overtime=$((seconds - ($(echo "$data" | jq '.data.grouped_data | length') * 8 * 3600)))
@@ -107,5 +108,25 @@ solidtime_get_shift_stats() {
 }
 
 solidtime_get_current_shift_info() {
-    command ...
+    if [[ -n "$time_offline" ]] && [[ -z "$time_start" ]]; then
+        error "--offline requires --start to be passed"
+        exit 1 
+    fi
+
+    solidtime_assert_user_id
+    solidtime_assert_org_id
+    solidtime_assert_project_id
+
+    local start="$(date -uv-1d +%Y-%m-%dT%H:%M:%SZ)" 
+    local end="$(date -uv+1d +%Y-%m-%dT%H:%M:%SZ)"
+
+    local data="$(solidtime_get "/organizations/$solidtime_org_id/time-entries" \
+        "start=$start" \
+        "project_ids[]=$solidtime_project_id" \
+        "user_id=$solidtime_user_id" \
+        "active=true"
+        )"
+
+    stdout $data
+
 }

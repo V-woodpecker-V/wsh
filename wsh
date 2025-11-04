@@ -139,26 +139,6 @@ count_ops() {
     return $count
 }
 
-setup_shims() {
-    local shim_content="$1"
-    shift
-    mkdir -p "$shim_dir"
-
-    for shim in "$@"; do
-        if [[ -n $init_uninit ]]; then
-            rm -f "$shim_dir/$shim"
-        else
-            echo "#!/usr/bin/env bash
-cmd=\"\$(which -a \$(basename \"\$0\") | grep -v \"\$(realpath \"\$0\")\" | head -1)\" 
-if [[ -z \"\$cmd\" ]]; then
-    $shim_content
-fi
-exec \"\$cmd\" \"\$@\"" > "$shim_dir/$shim"
-            chmod +x "$shim_dir/$shim"
-        fi
-    done
-}
-
 if [[ ${#@} -eq 0 ]]; then
     usage
     exit 1
@@ -267,36 +247,32 @@ elif [[ $op_count -gt 1 ]]; then
     exit 1
 fi
 
-if [[ -z $init ]]; then
+if [[ -n $init ]]; then
     debug "initializing autocompletions"
-    echo "autoload -Uz compinit"
-    echo "compinit"
-    echo "eval $(starship init zsh)"
-    echo "PATH=\"$shim_dir:\$PATH\""
+    stdout "autoload -Uz compinit"
+    stdout "compinit"
+    stdout "eval $(starship init zsh)"
+    stdout "PATH=\"$shim_dir:\$PATH\""
 fi
 
 if [[ -n $init_pyenv ]]; then
     debug "initializing pyenv"
-    setup_shims \
-    'export PYENV_ROOT="$HOME/.pyenv"
-    [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-    eval "$(command pyenv init - zsh)"' \
-    pyenv python python3 pip pip3
+    stdout 'export PYENV_ROOT="$HOME/.pyenv"'
+    stdout '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+    stdout 'eval "$(command pyenv init - zsh)"'
 fi
 
 if [[ -n $init_nvm ]]; then
     debug "initializing nvm"
-    setup_shims \
-    'export NVM_DIR="$HOME/.nvm"
-    [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-    [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"' \
-    nvm node npm npx pnpm
+    stdout 'export NVM_DIR="$HOME/.nvm"'
+    stdout '[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"'
+    stdout '[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"'
 fi
 
 if [[ -n $shell_sync ]]; then
     debug "syncing packages"
     for pkg in "${args[@]}"; do
-        echo $pkg
+        stdout $pkg
     done
 fi
 
