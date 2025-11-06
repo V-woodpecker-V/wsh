@@ -9,10 +9,11 @@ import (
 
 // Shell represents a wsh shell instance
 type Shell struct {
-	ZshPath     string
-	WshrcPath   string
-	Env         *Environment
-	WshrcLoader *WshrcLoader
+	ZshPath       string
+	WshrcPath     string
+	Env           *Environment
+	WshrcLoader   *WshrcLoader
+	PluginRegistry *PluginRegistry
 }
 
 // ShellOption configures a Shell instance
@@ -31,10 +32,11 @@ func NewShell(opts ...ShellOption) (*Shell, error) {
 	}
 
 	shell := &Shell{
-		ZshPath:     zshPath,
-		WshrcPath:   wshrcPath,
-		Env:         NewEnvironment(),
-		WshrcLoader: NewWshrcLoader(zshPath),
+		ZshPath:        zshPath,
+		WshrcPath:      wshrcPath,
+		Env:            NewEnvironment(),
+		WshrcLoader:    NewWshrcLoader(zshPath),
+		PluginRegistry: NewPluginRegistry(),
 	}
 
 	// Apply options
@@ -45,6 +47,22 @@ func NewShell(opts ...ShellOption) (*Shell, error) {
 	}
 
 	return shell, nil
+}
+
+// RegisterShellPlugin registers the shell plugin (-S/--shell) as an internal plugin
+func RegisterShellPlugin(registry *PluginRegistry) error {
+	shellCtx := &PluginContext{
+		Context:     'S',
+		ContextLong: "shell",
+		Description: "Shell operations (alias for bare wsh)",
+		Script:      "", // Internal plugin, no script
+		Flags: []Flag{
+			{Short: 'c', Long: "command", ArgName: "cmd", Description: "Execute command and exit"},
+			{Short: 'r', Long: "reload", Description: "Reload .wshrc and plugins"},
+		},
+	}
+
+	return registry.Register(shellCtx)
 }
 
 // Shell options

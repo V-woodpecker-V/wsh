@@ -30,7 +30,9 @@ func (e *Environment) GetCurrent() map[string]string {
 
 // ExecuteAndCapture sources a script and captures its resulting environment
 func (e *Environment) ExecuteAndCapture(zshPath, scriptPath string) (map[string]string, error) {
-	script := fmt.Sprintf("source %s >/dev/null 2>&1 && env -0", scriptPath)
+	// Redirect script output to stderr so it's visible to user
+	// while env -0 output goes to stdout for capture
+	script := fmt.Sprintf("source %s >&2 && env -0", scriptPath)
 
 	cmd := exec.Command(zshPath, "-c", script)
 	var out bytes.Buffer

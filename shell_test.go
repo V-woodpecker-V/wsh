@@ -227,3 +227,51 @@ func TestShell_Run_WithFailingCommand(t *testing.T) {
 		t.Errorf("Run() exit code = %d, want 42", exitCode)
 	}
 }
+
+func TestRegisterShellPlugin(t *testing.T) {
+	registry := NewPluginRegistry()
+
+	err := RegisterShellPlugin(registry)
+	if err != nil {
+		t.Fatalf("RegisterShellPlugin() error = %v", err)
+	}
+
+	// Verify registration
+	ctx := registry.Lookup([]rune{'S'})
+	if ctx == nil {
+		t.Fatal("Expected shell plugin to be registered")
+	}
+
+	if ctx.Context != 'S' {
+		t.Errorf("Context = %c, want S", ctx.Context)
+	}
+
+	if ctx.ContextLong != "shell" {
+		t.Errorf("ContextLong = %s, want shell", ctx.ContextLong)
+	}
+
+	// Check flags
+	if len(ctx.Flags) != 2 {
+		t.Fatalf("Expected 2 flags, got %d", len(ctx.Flags))
+	}
+
+	// Verify command flag exists
+	hasCommand := false
+	hasReload := false
+	for _, flag := range ctx.Flags {
+		if flag.Short == 'c' && flag.Long == "command" {
+			hasCommand = true
+		}
+		if flag.Short == 'r' && flag.Long == "reload" {
+			hasReload = true
+		}
+	}
+
+	if !hasCommand {
+		t.Error("Expected command flag (-c/--command) to exist")
+	}
+
+	if !hasReload {
+		t.Error("Expected reload flag (-r/--reload) to exist")
+	}
+}

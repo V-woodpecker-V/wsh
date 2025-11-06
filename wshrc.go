@@ -102,23 +102,69 @@ func (w *WshrcLoader) loadFile(path string) string {
 }
 
 // loadDirectory processes a .wshrc directory by executing all scripts
+// Special files: _pre.sh runs first, _post.sh runs last, others run in parallel
 func (w *WshrcLoader) loadDirectory(dirPath string) (string, error) {
-	scripts, err := w.findScripts(dirPath)
+	allScripts, err := w.findScripts(dirPath)
 	if err != nil {
 		return "", fmt.Errorf("error reading directory: %w", err)
 	}
 
-	if len(scripts) == 0 {
+	if len(allScripts) == 0 {
 		return "", nil
 	}
 
-	currentEnv := w.Env.GetCurrent()
-	mergedEnv, err := w.Strategy(w.ZshPath, scripts, w.ScriptExecutor)
-	if err != nil {
-		return "", err
+	// Separate special files from regular scripts
+	var preScript, postScript string
+	var regularScripts []string
+
+	for _, script := range allScripts {
+		name := filepath.Base(script)
+		switch name {
+		case "_pre.sh":
+			preScript = script
+		case "_post.sh":
+			postScript = script
+		default:
+			regularScripts = append(regularScripts, script)
+		}
 	}
 
-	return w.Env.BuildExportScript(currentEnv, mergedEnv), nil
+	currentEnv := w.Env.GetCurrent()
+	var mergedEnv map[string]string
+
+	// Execute _pre.sh first if it exists
+	if preScript != "" {
+		env, err := w.ScriptExecutor(w.ZshPath, preScript)
+		if err != nil {
+			return "", fmt.Errorf("error executing _pre.sh: %w", err)
+		}
+		currentEnv = env
+	}
+
+	// Execute regular scripts in parallel (or according to strategy)
+	if len(regularScripts) > 0 {
+		env, err := w.Strategy(w.ZshPath, regularScripts, w.ScriptExecutor)
+		if err != nil {
+			return "", err
+		}
+		// Merge with environment from _pre.sh
+		for k, v := range env {
+			currentEnv[k] = v
+		}
+	}
+
+	// Execute _post.sh last if it exists
+	if postScript != "" {
+		env, err := w.ScriptExecutor(w.ZshPath, postScript)
+		if err != nil {
+			return "", fmt.Errorf("error executing _post.sh: %w", err)
+		}
+		mergedEnv = env
+	} else {
+		mergedEnv = currentEnv
+	}
+
+	return w.Env.BuildExportScript(w.Env.GetCurrent(), mergedEnv), nil
 }
 
 // findScripts returns all regular, non-hidden files in a directory
@@ -141,6 +187,7 @@ func (w *WshrcLoader) findScripts(dirPath string) ([]string, error) {
 // Execution Strategies
 
 // ParallelExecutionStrategy executes scripts concurrently
+// TODO: Add proper Ctrl-C (SIGINT) handling to gracefully cancel long-running scripts
 func ParallelExecutionStrategy(zshPath string, scripts []string, executor ScriptExecutor) (map[string]string, error) {
 	var wg sync.WaitGroup
 	envChan := make(chan map[string]string, len(scripts))
