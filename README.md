@@ -1,4 +1,4 @@
-# wsh - Woodpecker Shell
+# wsh - Wood Shell
 
 A zsh wrapper with support for modular configuration through `.wshrc` files or directories, and a powerful plugin system for extending functionality.
 
